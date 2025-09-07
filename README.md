@@ -1,8 +1,8 @@
-# 🚀 Enterprise NL2SQL Service - Production Deployment Guide
+# 🚀 Enterprise NL2SQL Service - Local Ollama Integration
 
 ## 📋 Overview
 
-The Enterprise NL2SQL Service is a production-ready application that converts natural language questions into SQL queries using Large Language Models (LLMs). This guide provides complete instructions for deploying and managing the service in a production environment.
+The Enterprise NL2SQL Service is a production-ready application that converts natural language questions into SQL queries using **local Ollama LLMs**. This guide provides complete instructions for deploying and managing the service with **Phi-3 3.8B model** running locally, eliminating cloud API dependencies and costs.
 
 ## 🏗️ Architecture
 
@@ -16,41 +16,66 @@ The Enterprise NL2SQL Service is a production-ready application that converts na
                        │   PostgreSQL     │◄───│      Redis      │
                        │   Database       │    │     Cache       │
                        └──────────────────┘    └─────────────────┘
-                                │
+                                │                        │
                        ┌──────────────────┐    ┌─────────────────┐
-                       │   Prometheus     │    │    Grafana      │
-                       │   Monitoring     │───►│   Dashboard     │
+                       │   Prometheus     │    │  Local Ollama   │
+                       │   Monitoring     │───►│   Phi-3 3.8B    │
                        └──────────────────┘    └─────────────────┘
+                                │
+                       ┌──────────────────┐
+                       │    Grafana       │
+                       │   Dashboard      │
+                       └──────────────────┘
 ```
 
 ## 🔧 Prerequisites
 
 ### System Requirements
-- **Operating System**: Linux (Ubuntu 20.04+ recommended)
-- **Memory**: Minimum 8GB RAM (16GB recommended)
-- **CPU**: 4+ cores
-- **Storage**: 50GB+ SSD
-- **Network**: Internet connectivity for LLM API calls
+- **Operating System**: Linux/macOS (Ubuntu 20.04+ recommended for Linux)
+- **Memory**: Minimum 8GB RAM (16GB recommended for local LLM)
+- **CPU**: 4+ cores (Phi-3 3.8B model ~20 second inference time)
+- **Storage**: 50GB+ SSD (includes 2.2GB for Phi-3 model)
+- **Network**: No internet required for inference (local Ollama)
 
 ### Software Requirements
 - Docker 20.10+
 - Docker Compose 2.0+
 - Git
+- **Ollama** (for local LLM inference)
 - SSL Certificates (for HTTPS)
 
-### API Keys Required
-- **OpenAI API Key** (or other LLM provider)
-- **Sentry DSN** (optional, for error tracking)
+### Local LLM Setup
+- **Ollama installation** (see Quick Start section)
+- **Phi-3 3.8B model** (automatic download: 2.2GB)
+- **No API keys required** for inference
 
 ## 🚀 Quick Start Deployment
 
-### 1. Clone the Repository
+### 1. Install Ollama and Download Phi-3 Model
+```bash
+# Install Ollama (macOS)
+curl -fsSL https://ollama.com/install.sh | sh
+
+# For Linux
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Start Ollama service
+ollama serve
+
+# Download Phi-3 3.8B model (in another terminal)
+ollama pull phi3:3.8b
+
+# Verify model is available
+ollama list
+```
+
+### 2. Clone the Repository
 ```bash
 git clone <repository-url>
 cd enterprise-nl2sql
 ```
 
-### 2. Environment Configuration
+### 3. Environment Configuration
 ```bash
 # Copy environment template
 cp .env.example .env
@@ -59,16 +84,18 @@ cp .env.example .env
 nano .env
 ```
 
-**Required Environment Variables:**
+**Required Environment Variables for Local Ollama:**
 ```bash
 # API Configuration
 ENVIRONMENT=production
-API_KEY=your-secure-api-key-here
+API_KEY=test-api-key
 SECRET_KEY=your-super-secret-key-here
 JWT_SECRET_KEY=your-jwt-secret-key-here
 
-# LLM Configuration
-OPENAI_API_KEY=sk-your-openai-api-key-here
+# Local Ollama Configuration
+OLLAMA_BASE_URL=http://host.docker.internal:11434
+LLM_MODEL=phi3:3.8b
+OLLAMA_MODEL=phi3:3.8b
 
 # Database
 DATABASE_URL=postgresql://nl2sql:nl2sql123@postgres:5432/nl2sql_db
@@ -80,8 +107,11 @@ REDIS_URL=redis://redis:6379
 SENTRY_DSN=https://your-sentry-dsn-here
 ```
 
-### 3. Deploy with Docker Compose
+### 4. Deploy with Docker Compose
 ```bash
+# Ensure Ollama is running and accessible
+curl http://localhost:11434/api/tags
+
 # Start all services
 docker-compose up -d
 
@@ -92,10 +122,19 @@ docker-compose ps
 docker-compose logs -f nl2sql-api
 ```
 
-### 4. Verify Deployment
+### 5. Verify Deployment
 ```bash
 # Health check
 curl http://localhost:8000/health
+
+# Test NL2SQL with local Ollama
+curl -X POST "http://localhost:8000/api/v1/query/public/execute" \
+  -H "Authorization: Bearer test-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "How many users are there?",
+    "database_url": "postgresql://nl2sql:nl2sql123@postgres:5432/nl2sql_db"
+  }'
 
 # API documentation
 open http://localhost:8000/docs
@@ -120,7 +159,10 @@ open http://localhost:8000/docs
 
 ### API Key Management
 ```bash
-# Generate secure API keys
+# For local development, use the test API key
+API_KEY=test-api-key
+
+# For production, generate secure API keys
 python -c "import secrets; print('API_KEY=' + secrets.token_urlsafe(32))"
 python -c "import secrets; print('SECRET_KEY=' + secrets.token_urlsafe(32))"
 python -c "import secrets; print('JWT_SECRET_KEY=' + secrets.token_urlsafe(32))"
@@ -170,13 +212,28 @@ tail -f logs/nginx/access.log
 
 ## 🔧 Configuration Options
 
-### LLM Configuration
+### Local Ollama Configuration
 ```python
 # In .env file
-LLM_MODEL=gpt-4                    # OpenAI model
-LLM_TEMPERATURE=0.0               # Response consistency
-MAX_TOKENS=2000                   # Maximum response length
-LLM_TIMEOUT=60                    # Request timeout
+OLLAMA_BASE_URL=http://host.docker.internal:11434  # Docker to host connection
+LLM_MODEL=phi3:3.8b                                # Phi-3 3.8B model (2.2GB)
+OLLAMA_MODEL=phi3:3.8b                             # Model for Ollama service
+LLM_TEMPERATURE=0.0                                # Deterministic responses
+MAX_TOKENS=2000                                    # Maximum response length
+LLM_TIMEOUT=60                                     # Request timeout (20s typical)
+```
+
+### Alternative Models
+```bash
+# Larger model (better accuracy, slower inference)
+ollama pull llama3.1:8b      # 4.7GB model, ~45 second inference
+
+# Smaller model (faster inference, lower accuracy)  
+ollama pull phi3:mini        # 2.3GB model, ~15 second inference
+
+# Update .env file accordingly
+LLM_MODEL=llama3.1:8b        # or phi3:mini
+OLLAMA_MODEL=llama3.1:8b     # or phi3:mini
 ```
 
 ### Performance Tuning
@@ -221,18 +278,20 @@ docker-compose exec redis redis-cli ping
 # Install Apache Bench
 sudo apt install apache2-utils
 
-# Basic load test
-ab -n 1000 -c 10 -H "Authorization: Bearer your-api-key" \
+# Basic load test with local Ollama
+ab -n 10 -c 2 -H "Authorization: Bearer test-api-key" \
    -T "application/json" \
    -p test-query.json \
    http://localhost:8000/api/v1/query/public/execute
+
+# Note: Use lower concurrency (-c 2) due to local LLM processing time
 ```
 
 **test-query.json:**
 ```json
 {
   "question": "How many users are there?",
-  "database_url": "sqlite:///test.db",
+  "database_url": "postgresql://nl2sql:nl2sql123@postgres:5432/nl2sql_db",
   "max_results": 10
 }
 ```
@@ -315,14 +374,27 @@ services:
    # Consider using smaller models or model quantization
    ```
 
-4. **LLM API Errors**
+4. **Local Ollama Connection Issues**
    ```bash
-   # Check API key
-   curl -H "Authorization: Bearer $OPENAI_API_KEY" \
-        https://api.openai.com/v1/models
+   # Test Ollama connectivity from container
+   docker-compose exec nl2sql-api curl http://host.docker.internal:11434/api/tags
    
-   # Monitor rate limits
-   tail -f logs/app.log | grep -i "rate limit"
+   # Check Ollama service status
+   curl http://localhost:11434/api/tags
+   
+   # Verify Phi-3 model is loaded
+   curl http://localhost:11434/api/show -d '{"name": "phi3:3.8b"}'
+   ```
+
+5. **Slow Response Times**
+   ```bash
+   # Phi-3 3.8B typical response time: ~20 seconds
+   # Monitor inference time in logs
+   docker-compose logs -f nl2sql-api | grep "inference_time"
+   
+   # Consider upgrading to faster hardware or larger model
+   # Check system resources during inference
+   docker stats
    ```
 
 ### Log Analysis
@@ -394,24 +466,44 @@ grep -i error logs/app.log | tail -50
 
 ## 🚀 Advanced Features
 
-### Custom Prompt Templates
+### Ollama Model Management
+```bash
+# List available models
+ollama list
+
+# Pull different models
+ollama pull codellama:7b       # For code generation
+ollama pull mistral:7b         # Alternative general model
+
+# Remove models to save space
+ollama rm phi3:3.8b
+
+# Update model
+ollama pull phi3:3.8b  # Re-downloads latest version
+```
+
+### Custom Prompt Templates for Phi-3
 ```python
-# Add custom templates in app/services/nl2sql_service.py
-custom_template = PromptTemplate(
-    system_prompt="Your custom system prompt",
-    user_prompt="Your custom user prompt with {variables}",
-    temperature=0.1
+# Optimized for Phi-3 3.8B in app/services/nl2sql_service.py
+phi3_template = PromptTemplate(
+    system_prompt="You are a SQL expert. Generate only valid SQL.",
+    user_prompt="""Examples:
+Question: How many users?
+SQL: SELECT COUNT(*) FROM users;
+
+Tables: {tables}
+Question: {question}
+SQL:""",
+    temperature=0.0  # Deterministic for Phi-3
 )
 ```
 
-### Multi-LLM Support
+### Local Model Performance Optimization
 ```python
-# Configure multiple LLM providers
-LLM_PROVIDERS = {
-    'openai': 'gpt-4',
-    'anthropic': 'claude-3',
-    'azure': 'gpt-4-32k'
-}
+# Environment variables for better performance
+OLLAMA_NUM_PARALLEL=1          # Single request processing
+OLLAMA_NUM_THREAD=8            # CPU threads for inference
+OLLAMA_HOST=0.0.0.0           # Bind to all interfaces
 ```
 
 ### Custom Security Rules

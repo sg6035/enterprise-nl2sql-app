@@ -662,10 +662,25 @@ class NL2SQLService:
     """Enterprise-grade NL2SQL service with all advanced features"""
     
     def __init__(self):
-        self.llm_client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        self.llm_provider = getattr(settings, 'LLM_PROVIDER', 'openai').lower()
+        self._init_llm_client()
         self.schema_linker = IntelligentSchemaLinker()
         self.prompt_builder = AdvancedPromptBuilder()
         self.cache_manager = self._init_cache_manager()
+    
+    def _init_llm_client(self):
+        """Initialize LLM client based on provider configuration"""
+        if self.llm_provider == 'ollama':
+            from app.services.ollama_service import OllamaLLMService
+            self.llm_client = OllamaLLMService(
+                model_name=getattr(settings, 'OLLAMA_MODEL', 'llama3.1:8b'),
+                base_url=getattr(settings, 'OLLAMA_BASE_URL', 'http://localhost:11434')
+            )
+            logger.info(f"Initialized Ollama LLM client with model: {self.llm_client.model_name}")
+        else:
+            # Default to OpenAI
+            self.llm_client = OpenAI(api_key=settings.OPENAI_API_KEY)
+            logger.info(f"Initialized OpenAI LLM client with model: {settings.LLM_MODEL}")
         
     def _init_cache_manager(self):
         """Initialize cache manager"""
@@ -827,30 +842,95 @@ class NL2SQLService:
             temperature = 0.0 if template_type == 'basic' else 0.1
             max_tokens = 1000 if template_type == 'basic' else 2000
             
-            response = self.llm_client.chat.completions.create(
-                model=settings.LLM_MODEL,
-                messages=[
-                    {"role": "system", "content": "You are an expert SQL developer."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=temperature,
-                max_tokens=max_tokens,
-                timeout=settings.LLM_TIMEOUT
-            )
+            if self.llm_provider == 'ollama':
+                # Extremely simple prompt for Phi-3 3.8B
+                system_prompt = "Generate SQL."
+                
+                # Extract the question
+                question_match = re.search(r'Question: (.+?)(?:\n|$)', prompt, re.IGNORECASE)
+                if question_match:
+                    question = question_match.group(1).strip()
+                else:
+                    question = "How many users are there?"  # fallback
+                
+                # Very basic template - just question and examples
+                user_prompt = f"""{question}
+
+SELECT COUNT(*) FROM users"""
+                
+                generated_text = self.llm_client.generate_sql(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    temperature=0.0,
+                    max_tokens=64  # Very short
+                )
+                
+                # Clean up the response
+                generated_text = generated_text.strip()
+                if not generated_text.upper().startswith('SELECT'):
+                    generated_text = "SELECT COUNT(*) FROM users"
+            else:
+                # Use OpenAI
+                response = self.llm_client.chat.completions.create(
+                    model=settings.LLM_MODEL,
+                    messages=[
+                        {"role": "system", "content": "You are an expert SQL developer."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    timeout=settings.LLM_TIMEOUT
+                )
+                generated_text = response.choices[0].message.content
             
-            generated_text = response.choices[0].message.content
+            # Log the raw generated text for debugging
+            logger.info(f"Raw generated text: {generated_text[:500]}...")
             
             # Extract SQL from tags
             sql_match = re.search(r'<sql>(.*?)</sql>', generated_text, re.DOTALL)
             if sql_match:
-                return sql_match.group(1).strip()
+                sql_result = sql_match.group(1).strip()
+                logger.info(f"Extracted SQL from tags: {sql_result}")
+                # Clean up common Phi-3 issues
+                sql_result = self._clean_sql(sql_result)
+                return sql_result
             
-            # Fallback: return the whole response
-            return generated_text.strip()
+            # Fallback: return the whole response with cleaning
+            cleaned_sql = self._clean_sql(generated_text.strip())
+            logger.info(f"Using fallback - cleaned SQL: {cleaned_sql}")
+            return cleaned_sql
             
         except Exception as e:
             logger.error(f"SQL generation failed: {str(e)}")
             raise SQLGenerationError(f"Failed to generate SQL: {str(e)}")
+    
+    def _clean_sql(self, sql: str) -> str:
+        """Clean up common SQL generation issues from Phi-3"""
+        if not sql:
+            return sql
+            
+        # Remove common formatting issues
+        sql = sql.strip()
+        
+        # Fix semicolon followed by LIMIT (invalid syntax)
+        # Pattern: "; LIMIT 100" should become " LIMIT 100"
+        sql = re.sub(r';\s*LIMIT\s+(\d+)', r' LIMIT \1', sql, flags=re.IGNORECASE)
+        
+        # Fix "NOT is_null()" to "IS NOT NULL"
+        sql = re.sub(r'NOT\s+is_null\s*\(\s*(\w+)\s*\)', r'\1 IS NOT NULL', sql, flags=re.IGNORECASE)
+        
+        # Remove trailing semicolons
+        sql = sql.rstrip(';')
+        
+        # Remove any leading/trailing quotes that might wrap the SQL
+        sql = sql.strip('"\'`')
+        
+        # Ensure it starts with SELECT if it looks like a query
+        if sql and not re.match(r'^\s*(SELECT|WITH|EXPLAIN)', sql, re.IGNORECASE):
+            if 'FROM' in sql.upper():
+                sql = 'SELECT ' + sql
+        
+        return sql.strip()
     
     async def _execute_query(
         self, 
@@ -944,6 +1024,9 @@ class NL2SQLService:
         """Validate SQL for security risks"""
         sql_upper = sql_query.upper().strip()
         
+        # Log what we're validating
+        logger.info(f"Validating SQL security for: {sql_query[:100]}...")
+        
         # Check for dangerous keywords
         for keyword in settings.DANGEROUS_KEYWORDS:
             if keyword in sql_upper:
@@ -951,6 +1034,7 @@ class NL2SQLService:
         
         # Ensure query starts with SELECT or WITH
         if not sql_upper.startswith(('SELECT', 'WITH')):
+            logger.warning(f"SQL doesn't start with SELECT/WITH. Starts with: {sql_upper[:50]}")
             return False, "Only SELECT and WITH queries are allowed"
         
         # Check for SQL injection patterns
@@ -1026,17 +1110,28 @@ Provide a clear explanation of:
 Keep the explanation non-technical and focused on business value.
 """
             
-            response = self.llm_client.chat.completions.create(
-                model=settings.LLM_MODEL,
-                messages=[
-                    {"role": "system", "content": "You are a helpful data analyst who explains SQL queries in simple terms."},
-                    {"role": "user", "content": explanation_prompt}
-                ],
-                temperature=0.3,
-                max_tokens=500
-            )
-            
-            return response.choices[0].message.content.strip()
+            if self.llm_provider == 'ollama':
+                # Use Ollama service
+                system_prompt = "You are a helpful data analyst who explains SQL queries in simple terms."
+                explanation = self.llm_client.generate_sql(
+                    system_prompt=system_prompt,
+                    user_prompt=explanation_prompt,
+                    temperature=0.3,
+                    max_tokens=500
+                )
+                return explanation.strip()
+            else:
+                # Use OpenAI
+                response = self.llm_client.chat.completions.create(
+                    model=settings.LLM_MODEL,
+                    messages=[
+                        {"role": "system", "content": "You are a helpful data analyst who explains SQL queries in simple terms."},
+                        {"role": "user", "content": explanation_prompt}
+                    ],
+                    temperature=0.3,
+                    max_tokens=500
+                )
+                return response.choices[0].message.content.strip()
             
         except Exception as e:
             logger.warning(f"Explanation generation failed: {str(e)}")

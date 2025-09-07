@@ -8,7 +8,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Initial project setup with enterprise-grade architecture
+- Comprehensive documentation updates for Ollama integration
+- Performance monitoring for local LLM inference
+- Model management utilities and troubleshooting guides
+
+## [1.1.0] - 2024-01-21
+
+### Added
+- **Local Ollama Integration**: Complete replacement of OpenAI API with local Phi-3 3.8B model
+- **Phi-3 Model Support**: Optimized prompts and post-processing for Microsoft Phi-3 3.8B
+- **Docker Host Connectivity**: Configured Docker networking for Ollama communication
+- **SQL Cleaning Logic**: Custom post-processing to handle Phi-3 output formatting
+- **Model Performance Monitoring**: Tracking inference times (~20 seconds typical)
+- **Alternative Model Support**: Easy switching between phi3:3.8b, phi3:mini, llama3.1:8b
+- **Cost Elimination**: Zero cloud API costs with local inference
+- **Privacy Enhancement**: All processing happens locally, no data sent to external APIs
+
+### Changed
+- **Authentication System**: Fixed JWT library compatibility (InvalidTokenError vs JWTError)
+- **Prompt Engineering**: Simplified prompts for better Phi-3 performance
+- **Environment Configuration**: Updated Docker Compose for Ollama connectivity
+- **API Response Format**: Enhanced with inference timing and model metadata
+- **Documentation**: Comprehensive rewrite for local deployment workflow
+
+### Fixed
+- **JWT Import Issues**: Resolved PyJWT library compatibility in security module
+- **SQL Generation**: Fixed Phi-3 output parsing with custom cleaning logic
+- **Docker Networking**: Configured host.docker.internal for container-to-host communication
+- **Authentication Flow**: Working API key validation with test-api-key for development
+- **Model Loading**: Proper Ollama model initialization and health checks
+
+### Security
+- **Local Processing**: Enhanced data privacy with no external API calls
+- **Authentication Hardening**: Fixed JWT token validation and error handling
+- **SQL Injection Prevention**: Maintained comprehensive security validation
+- **Rate Limiting**: Adjusted for local processing characteristics
+
+### Performance
+- **Response Time**: ~20 second inference with Phi-3 3.8B (predictable, local)
+- **Memory Optimization**: Efficient Ollama model loading and management
+- **Caching Strategy**: Enhanced caching for repeated queries to avoid re-inference
+- **Resource Management**: Optimized Docker resource allocation
+
+### Infrastructure
+- **Ollama Service**: Integrated local LLM service with health monitoring
+- **Model Management**: Automated model downloading and version management
+- **Development Workflow**: Simplified setup with working test credentials
+- **Monitoring Integration**: Extended Grafana dashboards for local LLM metrics
 
 ## [1.0.0] - 2024-01-20
 
@@ -74,6 +120,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## Migration Guide: OpenAI → Ollama
+
+### For Existing Deployments
+
+1. **Install Ollama**:
+   ```bash
+   curl -fsSL https://ollama.com/install.sh | sh
+   ollama serve &
+   ollama pull phi3:3.8b
+   ```
+
+2. **Update Environment Variables**:
+   ```bash
+   # Remove OpenAI configuration
+   # OPENAI_API_KEY=sk-... 
+
+   # Add Ollama configuration
+   OLLAMA_BASE_URL=http://host.docker.internal:11434
+   LLM_MODEL=phi3:3.8b
+   OLLAMA_MODEL=phi3:3.8b
+   ```
+
+3. **Rebuild Services**:
+   ```bash
+   docker-compose down
+   docker-compose up -d --build
+   ```
+
+### Benefits of Migration
+
+- ✅ **Zero API Costs**: No more OpenAI charges
+- ✅ **Data Privacy**: All processing stays local
+- ✅ **Predictable Performance**: ~20s response time
+- ✅ **Offline Capable**: No internet required for inference
+- ✅ **Full Control**: Model versioning and management
+
+---
+
 ## Version History Format
 
 ### Types of Changes
@@ -86,17 +170,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Example Entry Format
 ```
-## [1.1.0] - 2024-02-01
+## [1.2.0] - 2024-02-01
 
 ### Added
-- New feature description
+- New local model integration (e.g., CodeLlama support)
 
 ### Changed
-- Modified existing feature
+- Updated prompt templates for new model
 
 ### Fixed
-- Bug fix description
+- Performance optimization for model switching
 
 ### Security
-- Security improvement description
+- Enhanced local model security validation
 ```

@@ -17,11 +17,19 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - SENTRY_DSN=${SENTRY_DSN}
+      - TRANSFORMERS_CACHE=/app/data/transformers_cache
+      - SENTENCE_TRANSFORMERS_HOME=/app/data/sentence_transformers_cache
+      - HF_HOME=/app/data/huggingface_cache
+      - LLM_PROVIDER=ollama
+      - LLM_MODEL=phi3:3.8b
+      - OLLAMA_MODEL=phi3:3.8b
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
     depends_on:
       - postgres
       - redis
     volumes:
       - ./logs:/app/logs
+      - model_cache:/app/data
     restart: unless-stopped
     networks:
       - nl2sql-network
@@ -42,7 +50,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     ports:
-      - "5432:5432"
+      - "5433:5432"
     restart: unless-stopped
     networks:
       - nl2sql-network
@@ -126,6 +134,7 @@ volumes:
   redis_data:
   prometheus_data:
   grafana_data:
+  model_cache:
 
 networks:
   nl2sql-network:

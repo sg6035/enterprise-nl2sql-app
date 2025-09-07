@@ -67,9 +67,9 @@ setup_environment() {
         JWT_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
         
         # Update .env file
-        sed -i "s/your-secure-api-key-here/$API_KEY/" .env
-        sed -i "s/your-super-secret-key-here/$SECRET_KEY/" .env
-        sed -i "s/your-jwt-secret-key-here/$JWT_SECRET_KEY/" .env
+        sed -i '' "s/your-secure-api-key-here/$API_KEY/" .env
+        sed -i '' "s/your-super-secret-key-here/$SECRET_KEY/" .env
+        sed -i '' "s/your-jwt-secret-key-here/$JWT_SECRET_KEY/" .env
         
         warn "Please edit .env file and add your OpenAI API key and other required configurations"
         warn "Run: nano .env"

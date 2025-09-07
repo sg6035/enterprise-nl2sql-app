@@ -1,15 +1,16 @@
 """
 Enterprise NL2SQL Main Application
-"""
 
+Main FastAPI application with security, monitoring, and enterprise features.
+"""
+import time
+import structlog
+import sentry_sdk
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
-import time
-import structlog
-import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 
@@ -31,17 +32,17 @@ from app.core.logging import setup_logging
 setup_logging()
 logger = structlog.get_logger(__name__)
 
-# Initialize Sentry for error tracking
-if settings.SENTRY_DSN:
-    sentry_sdk.init(
-        dsn=settings.SENTRY_DSN,
-        integrations=[
-            FastApiIntegration(auto_enabling=True),
-            SqlalchemyIntegration(),
-        ],
-        traces_sample_rate=0.1,
-        environment=settings.ENVIRONMENT,
-    )
+# Initialize Sentry for error tracking (disabled - no DSN configured)
+# if settings.SENTRY_DSN and settings.SENTRY_DSN.strip():
+#     sentry_sdk.init(
+#         dsn=settings.SENTRY_DSN,
+#         integrations=[
+#             FastApiIntegration(),
+#             SqlalchemyIntegration(),
+#         ],
+#         traces_sample_rate=0.1,
+#         environment=settings.ENVIRONMENT
+#     )
 
 def create_application() -> FastAPI:
     """Create FastAPI application with all configurations"""

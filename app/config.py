@@ -4,7 +4,8 @@ Enterprise NL2SQL Configuration Management
 
 import os
 from typing import List, Optional
-from pydantic import BaseSettings, validator
+from pydantic_settings import BaseSettings
+from pydantic import validator
 import secrets
 
 
@@ -31,12 +32,17 @@ class Settings(BaseSettings):
     DATABASE_POOL_TIMEOUT: int = 30
     
     # LLM Configuration
+    LLM_PROVIDER: str = "openai"  # openai or ollama
     OPENAI_API_KEY: Optional[str] = None
     ANTHROPIC_API_KEY: Optional[str] = None
     LLM_MODEL: str = "gpt-4"
     LLM_TEMPERATURE: float = 0.0
     MAX_TOKENS: int = 2000
     LLM_TIMEOUT: int = 60
+    
+    # Ollama Configuration
+    OLLAMA_MODEL: str = "llama3.1:8b"
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
     
     # Cache Configuration
     REDIS_URL: str = "redis://localhost:6379"

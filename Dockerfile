@@ -26,7 +26,6 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 # Copy application code
 COPY app/ ./app/
-COPY *.py ./
 
 # Create necessary directories
 RUN mkdir -p /app/logs /app/data \

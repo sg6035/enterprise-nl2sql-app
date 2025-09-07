@@ -43,7 +43,7 @@ fake_users_db = {
         "id": "admin-user-id",
         "email": "admin@example.com",
         "name": "Admin User",
-        "hashed_password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",  # "admin123"
+        "hashed_password": "$2b$12$BqsdRawv0Gr.f.l8HsKFq.PdmArhGuX6S/7OQj7FUwjwtQcuDxndC",  # "admin123"
         "is_active": True,
         "permissions": ["admin", "query:execute", "query:validate", "user:manage"]
     },
@@ -51,7 +51,7 @@ fake_users_db = {
         "id": "regular-user-id", 
         "email": "user@example.com",
         "name": "Regular User",
-        "hashed_password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",  # "user123"
+        "hashed_password": "$2b$12$AhWIYbLDwEhPKI3.hNY86ek0f8bWxv.KlPyXAElIDKU.q8A/l9z6K",  # "user123"
         "is_active": True,
         "permissions": ["query:execute", "query:validate"]
     }
